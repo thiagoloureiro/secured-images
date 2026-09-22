@@ -1,9 +1,46 @@
-FROM opensearchproject/opensearch:2.19.6
+FROM opensearchproject/opensearch:2.19.6 AS patched
 
 # Official OpenSearch runs as UID 1000 (opensearch) on Amazon Linux 2023.
-# dnf needs root to refresh packages; restore the original user afterward.
-# Fail the build if Amazon Linux repos are unreachable so we never ship
-# an image that skipped the upgrade.
+USER root
+
+# 2.19.6 still ships netty-handler 4.1.135, bc-fips 2.1.2, and jackson-databind
+# 2.18.8 / 2.18.2 / 2.14.1. Stay on the same minor lines OpenSearch already uses.
+# jackson-annotations 2.14.1 is bumped with databind so plugin classpaths stay valid.
+ARG NETTY_HANDLER_VERSION=4.1.138.Final
+ARG NETTY_HANDLER_SHA256=a79fb814e029db17da82baea25a0340172af2c59f107fd20b394c1fa28680f21
+ARG BC_FIPS_VERSION=2.1.3
+ARG BC_FIPS_SHA256=f55fc476ede820d5c03fe87e6ced5bb0095e1dc30b387445846a3ff0274f8c0e
+ARG JACKSON_DATABIND_VERSION=2.18.11
+ARG JACKSON_DATABIND_SHA256=075ad94a76c3edf83e1972dc26f476361eb6b9d0e260d93fc11105509bc79cab
+ARG JACKSON_ANNOTATIONS_VERSION=2.18.11
+ARG JACKSON_ANNOTATIONS_SHA256=9eab0d36da981645392427eedcb087e13be542488e37f935723dc0be50d18a53
+
+COPY replace-jars.py /tmp/replace-jars.py
+
+RUN curl -fsSL -o "/tmp/netty-handler-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-handler/${NETTY_HANDLER_VERSION}/netty-handler-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/bc-fips-${BC_FIPS_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/org/bouncycastle/bc-fips/${BC_FIPS_VERSION}/bc-fips-${BC_FIPS_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/jackson-databind-${JACKSON_DATABIND_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/${JACKSON_DATABIND_VERSION}/jackson-databind-${JACKSON_DATABIND_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/jackson-annotations-${JACKSON_ANNOTATIONS_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/${JACKSON_ANNOTATIONS_VERSION}/jackson-annotations-${JACKSON_ANNOTATIONS_VERSION}.jar" && \
+    echo "${NETTY_HANDLER_SHA256}  /tmp/netty-handler-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${BC_FIPS_SHA256}  /tmp/bc-fips-${BC_FIPS_VERSION}.jar" | sha256sum -c && \
+    echo "${JACKSON_DATABIND_SHA256}  /tmp/jackson-databind-${JACKSON_DATABIND_VERSION}.jar" | sha256sum -c && \
+    echo "${JACKSON_ANNOTATIONS_SHA256}  /tmp/jackson-annotations-${JACKSON_ANNOTATIONS_VERSION}.jar" | sha256sum -c && \
+    python3 /tmp/replace-jars.py && \
+    rm -f /tmp/replace-jars.py \
+          /tmp/netty-handler-*.jar \
+          /tmp/bc-fips-*.jar \
+          /tmp/jackson-databind-*.jar \
+          /tmp/jackson-annotations-*.jar
+
+USER 1000
+
+# dnf needs root; fail if Amazon Linux repos are unreachable so we never ship
+# an image that skipped the OS upgrade. Restore UID 1000 afterward.
+FROM patched
 USER root
 RUN dnf update --releasever=latest -y --setopt=skip_if_unavailable=0 && \
     dnf clean all && \

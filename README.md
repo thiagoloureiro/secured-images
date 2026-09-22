@@ -64,7 +64,7 @@ Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiag
 | Image | Upstream | Dockerfile | Extra hardening |
 | --- | --- | --- | --- |
 | Kafka | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
-| OpenSearch | `opensearchproject/opensearch:2.19.6` | [`opensearch/Dockerfile-2.19.6`](opensearch/Dockerfile-2.19.6) | Amazon Linux 2023 `dnf update` as root, then restore UID 1000 |
+| OpenSearch | `opensearchproject/opensearch:2.19.6` | [`opensearch/Dockerfile-2.19.6`](opensearch/Dockerfile-2.19.6) | Amazon Linux `dnf update`; replace netty-handler 4.1.138, bc-fips 2.1.3, jackson-databind 2.18.11 |
 | PostgreSQL | `postgres:18.6` | [`postgres/Dockerfile-18.6`](postgres/Dockerfile-18.6) | Debian `apt-get upgrade` plus `gosu` rebuilt with a current Go toolchain |
 | Rancher | `rancher/rancher:v2.15.1` | [`rancher/Dockerfile-2.15.1`](rancher/Dockerfile-2.15.1) | SLES RPM update via BCI, rebuilt Go drivers/`etcdctl`, newer k3s overlay |
 | Redis | `redis:8.10.2` | [`redis/Dockerfile-8.10.2`](redis/Dockerfile-8.10.2) | Debian `apt-get upgrade`; runs as `redis` (UID 999) |

@@ -26,6 +26,12 @@ The result is the same application, same major/minor version, with a smaller vul
 
 Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiagoguaru).
 
+**Airflow**
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/airflow/3.3.1?logo=docker&label=airflow%203.3.1)](https://hub.docker.com/r/thiagoguaru/airflow)
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/airflow/3.3.2?logo=docker&label=airflow%203.3.2)](https://hub.docker.com/r/thiagoguaru/airflow)
+[![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/airflow?logo=docker)](https://hub.docker.com/r/thiagoguaru/airflow)
+[![Docker Pulls](https://img.shields.io/docker/pulls/thiagoguaru/airflow?logo=docker)](https://hub.docker.com/r/thiagoguaru/airflow)
+
 **Kafka**
 [![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/kafka/4.3.1?logo=docker)](https://hub.docker.com/r/thiagoguaru/kafka)
 [![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/kafka?logo=docker)](https://hub.docker.com/r/thiagoguaru/kafka)
@@ -63,6 +69,8 @@ Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiag
 
 | Image | Upstream | Dockerfile | Extra hardening |
 | --- | --- | --- | --- |
+| Airflow | `apache/airflow:3.3.1` | [`airflow/Dockerfile-3.3.1`](airflow/Dockerfile-3.3.1) | Debian `apt-get upgrade` as root, then restore UID 50000 |
+| Airflow | `apache/airflow:3.3.2` | [`airflow/Dockerfile-3.3.2`](airflow/Dockerfile-3.3.2) | Debian `apt-get upgrade` as root, then restore UID 50000 |
 | Kafka | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
 | OpenSearch | `opensearchproject/opensearch:2.19.6` | [`opensearch/Dockerfile-2.19.6`](opensearch/Dockerfile-2.19.6) | Amazon Linux `dnf update`; replace netty-handler 4.1.138, bc-fips 2.1.3, jackson-databind 2.18.11 |
 | PostgreSQL | `postgres:18.6` | [`postgres/Dockerfile-18.6`](postgres/Dockerfile-18.6) | Debian `apt-get upgrade` plus `gosu` rebuilt with a current Go toolchain |
@@ -78,6 +86,8 @@ Redis is intentionally non-root by default. Official `redis` starts as root and 
 Build from the repository root. Tag the result however you publish it (local, GitHub Container Registry, a private registry, and so on).
 
 ```bash
+docker build -f airflow/Dockerfile-3.3.1 -t secured-images/airflow:3.3.1 airflow
+docker build -f airflow/Dockerfile-3.3.2 -t secured-images/airflow:3.3.2 airflow
 docker build -f kafka/Dockerfile-4.3.1 -t secured-images/kafka:4.3.1 kafka
 docker build -f opensearch/Dockerfile-2.19.6 -t secured-images/opensearch:2.19.6 opensearch
 docker build -f postgres/Dockerfile-18.6 -t secured-images/postgres:18.6 postgres

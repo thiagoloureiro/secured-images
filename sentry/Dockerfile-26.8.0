@@ -8,15 +8,21 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Patch known-vulnerable Python deps pulled in by the base image beyond Sentry's own pins
-RUN pip install --no-cache-dir --upgrade \
-    "anyio>=4.14.2" \
-    "mistune>=3.3.3" \
-    "setuptools>=78.1.1" \
-    "sqlparse>=0.6.0" \
-    "Django>=5.2.16,<6.0" \
-    "djangorestframework>=3.17.2"
-
-RUN pip install --upgrade pip
-RUN pip install --upgrade anyio
-RUN pip install --upgrade msgpack
+# Patch known-vulnerable Python deps pulled in by the base image beyond Sentry's own pins.
+# Upgrade both the runtime venv and system Python so leftover copies do not keep scanner hits.
+RUN python3 -m pip install --no-cache-dir --upgrade \
+        "pip>=26.2" \
+        "setuptools>=83.0.0" \
+        "uv>=0.11.15" && \
+    /.venv/bin/python -m pip install --no-cache-dir --upgrade \
+        "pip>=26.2" \
+        "setuptools>=83.0.0" \
+        "uv>=0.11.15" \
+        "msgpack>=1.2.1" \
+        "h2>=4.3.0" \
+        "soupsieve>=2.8.4" \
+        "anyio>=4.14.2" \
+        "mistune>=3.3.3" \
+        "sqlparse>=0.6.0" \
+        "Django>=5.2.16,<6.0" \
+        "djangorestframework>=3.17.2"

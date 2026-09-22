@@ -1,3 +1,35 @@
+# Rebuild the SigNoz binary with a patched Go toolchain and golang.org/x
+# modules. stdlib and those Go deps are compiled into /root/signoz;
+# apk upgrade cannot patch them.
+FROM golang:1.25.13-bookworm AS signoz
+
+ARG TARGETARCH=amd64
+ARG SIGNOZ_VERSION=v0.142.1
+
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+
+WORKDIR /src
+
+RUN git clone --depth 1 --branch "${SIGNOZ_VERSION}" https://github.com/SigNoz/signoz.git .
+
+RUN go get \
+        golang.org/x/net@v0.56.0 \
+        golang.org/x/text@v0.39.0 \
+    && go mod tidy
+
+RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -C cmd/enterprise \
+        -tags timetzdata \
+        -ldflags="-s -w \
+            -X github.com/SigNoz/signoz/pkg/version.version=${SIGNOZ_VERSION} \
+            -X github.com/SigNoz/signoz/pkg/version.variant=enterprise \
+            -X github.com/SigNoz/signoz/ee/zeus.url=https://api.signoz.cloud \
+            -X github.com/SigNoz/signoz/ee/zeus.deprecatedURL=https://license.signoz.io" \
+        -o /signoz .
+
 FROM signoz/signoz:v0.142.1
 
-RUN apk update && apk upgrade
+COPY --from=signoz /signoz /root/signoz
+
+RUN apk update && apk upgrade && rm -rf /var/cache/apk/*

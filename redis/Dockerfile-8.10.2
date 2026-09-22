@@ -1,0 +1,14 @@
+FROM redis:8.10.2
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Official redis starts as root and gosu-drops to redis at runtime.
+# Stay root for apt, then run as redis so the image is non-root by default.
+USER root
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+USER redis

@@ -1,3 +1,6 @@
 FROM apache/kafka:4.3.1
 
-RUN apk update && apk upgrade
+# apache/kafka runs as appuser; apk needs root to write logs and upgrade packages.
+USER root
+RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
+USER appuser

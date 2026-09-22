@@ -26,14 +26,21 @@ The result is the same application, same major/minor version, with a smaller vul
 
 Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiagoguaru).
 
-| Image | Size | Upstream | Dockerfile | Extra hardening |
-| --- | --- | --- | --- | --- |
-| Kafka | [![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/kafka/4.3.1)](https://hub.docker.com/r/thiagoguaru/kafka) | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
-| PostgreSQL | [![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/postgres/18.6)](https://hub.docker.com/r/thiagoguaru/postgres) | `postgres:18.6` | [`postgres/Dockerfile-18.6`](postgres/Dockerfile-18.6) | Debian `apt-get upgrade` plus `gosu` rebuilt with a current Go toolchain |
-| Rancher | [![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/rancher/2.15.1)](https://hub.docker.com/r/thiagoguaru/rancher) | `rancher/rancher:v2.15.1` | [`rancher/Dockerfile-2.15.1`](rancher/Dockerfile-2.15.1) | SLES RPM update via BCI, rebuilt Go drivers/`etcdctl`, newer k3s overlay |
-| Redis | [![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/redis/8.10.2)](https://hub.docker.com/r/thiagoguaru/redis) | `redis:8.10.2` | [`redis/Dockerfile-8.10.2`](redis/Dockerfile-8.10.2) | Debian `apt-get upgrade`; runs as `redis` (UID 999) |
-| Sentry | [![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/sentry/26.8.0)](https://hub.docker.com/r/thiagoguaru/sentry) | `ghcr.io/getsentry/sentry:26.8.0` | [`sentry/Dockerfile-26.8.0`](sentry/Dockerfile-26.8.0) | Debian upgrades plus pinned Python package bumps |
-| SigNoz | [![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/signoz/0.142.1)](https://hub.docker.com/r/thiagoguaru/signoz) | `signoz/signoz:v0.142.1` | [`signoz/Dockerfile-0.142.1`](signoz/Dockerfile-0.142.1) | Alpine `apk upgrade` plus the SigNoz binary rebuilt with a patched Go toolchain |
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/kafka/4.3.1?label=kafka)](https://hub.docker.com/r/thiagoguaru/kafka)
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/postgres/18.6?label=postgres)](https://hub.docker.com/r/thiagoguaru/postgres)
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/rancher/2.15.1?label=rancher)](https://hub.docker.com/r/thiagoguaru/rancher)
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/redis/8.10.2?label=redis)](https://hub.docker.com/r/thiagoguaru/redis)
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/sentry/26.8.0?label=sentry)](https://hub.docker.com/r/thiagoguaru/sentry)
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/signoz/0.142.1?label=signoz)](https://hub.docker.com/r/thiagoguaru/signoz)
+
+| Image | Upstream | Dockerfile | Extra hardening |
+| --- | --- | --- | --- |
+| Kafka | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
+| PostgreSQL | `postgres:18.6` | [`postgres/Dockerfile-18.6`](postgres/Dockerfile-18.6) | Debian `apt-get upgrade` plus `gosu` rebuilt with a current Go toolchain |
+| Rancher | `rancher/rancher:v2.15.1` | [`rancher/Dockerfile-2.15.1`](rancher/Dockerfile-2.15.1) | SLES RPM update via BCI, rebuilt Go drivers/`etcdctl`, newer k3s overlay |
+| Redis | `redis:8.10.2` | [`redis/Dockerfile-8.10.2`](redis/Dockerfile-8.10.2) | Debian `apt-get upgrade`; runs as `redis` (UID 999) |
+| Sentry | `ghcr.io/getsentry/sentry:26.8.0` | [`sentry/Dockerfile-26.8.0`](sentry/Dockerfile-26.8.0) | Debian upgrades plus pinned Python package bumps |
+| SigNoz | `signoz/signoz:v0.142.1` | [`signoz/Dockerfile-0.142.1`](signoz/Dockerfile-0.142.1) | Alpine `apk upgrade` plus the SigNoz binary rebuilt with a patched Go toolchain |
 
 Redis is intentionally non-root by default. Official `redis` starts as root and `gosu`-drops to `redis` at runtime (and chowns `/data` first). Bind-mounted data directories must be writable by UID 999, or use a Docker volume / Kubernetes `fsGroup: 999`.
 

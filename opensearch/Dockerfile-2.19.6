@@ -1,0 +1,11 @@
+FROM opensearchproject/opensearch:2.19.6
+
+# Official OpenSearch runs as UID 1000 (opensearch) on Amazon Linux 2023.
+# dnf needs root to refresh packages; restore the original user afterward.
+# Fail the build if Amazon Linux repos are unreachable so we never ship
+# an image that skipped the upgrade.
+USER root
+RUN dnf update --releasever=latest -y --setopt=skip_if_unavailable=0 && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
+USER 1000

@@ -26,12 +26,35 @@ The result is the same application, same major/minor version, with a smaller vul
 
 Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiagoguaru).
 
-[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/kafka/4.3.1?label=kafka)](https://hub.docker.com/r/thiagoguaru/kafka)
-[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/postgres/18.6?label=postgres)](https://hub.docker.com/r/thiagoguaru/postgres)
-[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/rancher/2.15.1?label=rancher)](https://hub.docker.com/r/thiagoguaru/rancher)
-[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/redis/8.10.2?label=redis)](https://hub.docker.com/r/thiagoguaru/redis)
-[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/sentry/26.8.0?label=sentry)](https://hub.docker.com/r/thiagoguaru/sentry)
-[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/signoz/0.142.1?label=signoz)](https://hub.docker.com/r/thiagoguaru/signoz)
+**Kafka**
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/kafka/4.3.1?logo=docker)](https://hub.docker.com/r/thiagoguaru/kafka)
+[![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/kafka?logo=docker)](https://hub.docker.com/r/thiagoguaru/kafka)
+[![Docker Pulls](https://img.shields.io/docker/pulls/thiagoguaru/kafka?logo=docker)](https://hub.docker.com/r/thiagoguaru/kafka)
+
+**PostgreSQL**
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/postgres/18.6?logo=docker)](https://hub.docker.com/r/thiagoguaru/postgres)
+[![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/postgres?logo=docker)](https://hub.docker.com/r/thiagoguaru/postgres)
+[![Docker Pulls](https://img.shields.io/docker/pulls/thiagoguaru/postgres?logo=docker)](https://hub.docker.com/r/thiagoguaru/postgres)
+
+**Rancher**
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/rancher/2.15.1?logo=docker)](https://hub.docker.com/r/thiagoguaru/rancher)
+[![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/rancher?logo=docker)](https://hub.docker.com/r/thiagoguaru/rancher)
+[![Docker Pulls](https://img.shields.io/docker/pulls/thiagoguaru/rancher?logo=docker)](https://hub.docker.com/r/thiagoguaru/rancher)
+
+**Redis**
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/redis/8.10.2?logo=docker)](https://hub.docker.com/r/thiagoguaru/redis)
+[![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/redis?logo=docker)](https://hub.docker.com/r/thiagoguaru/redis)
+[![Docker Pulls](https://img.shields.io/docker/pulls/thiagoguaru/redis?logo=docker)](https://hub.docker.com/r/thiagoguaru/redis)
+
+**Sentry**
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/sentry/26.8.0?logo=docker)](https://hub.docker.com/r/thiagoguaru/sentry)
+[![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/sentry?logo=docker)](https://hub.docker.com/r/thiagoguaru/sentry)
+[![Docker Pulls](https://img.shields.io/docker/pulls/thiagoguaru/sentry?logo=docker)](https://hub.docker.com/r/thiagoguaru/sentry)
+
+**SigNoz**
+[![Docker Image Size](https://img.shields.io/docker/image-size/thiagoguaru/signoz/0.142.1?logo=docker)](https://hub.docker.com/r/thiagoguaru/signoz)
+[![Docker Image Last Updated](https://img.shields.io/docker/last-updated/thiagoguaru/signoz?logo=docker)](https://hub.docker.com/r/thiagoguaru/signoz)
+[![Docker Pulls](https://img.shields.io/docker/pulls/thiagoguaru/signoz?logo=docker)](https://hub.docker.com/r/thiagoguaru/signoz)
 
 | Image | Upstream | Dockerfile | Extra hardening |
 | --- | --- | --- | --- |

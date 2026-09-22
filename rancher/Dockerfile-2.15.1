@@ -1,0 +1,16 @@
+# rancher/rancher is SUSE BCI Micro: no zypper in the final image. Patch
+# SLES RPMs from a bci-base builder via --installroot, then overlay the
+# updated rootfs. Go binaries (k3s, containerd, runc, rancher-machine)
+# stay as shipped; scanners will still report those until rebuilt.
+FROM rancher/rancher:v2.15.1 AS rancher
+
+FROM registry.suse.com/bci/bci-base:15.7 AS patch
+COPY --from=rancher / /chroot/
+RUN zypper refresh && \
+    zypper --installroot /chroot -n --gpg-auto-import-keys update && \
+    zypper --installroot /chroot clean -a && \
+    rm -rf /chroot/var/cache/zypp/* /chroot/var/log/zypp/* \
+           /chroot/tmp/* /chroot/var/tmp/* /chroot/usr/share/doc/packages/*
+
+FROM rancher/rancher:v2.15.1
+COPY --from=patch /chroot/ /

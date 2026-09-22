@@ -16,9 +16,9 @@ For example, `postgres/Dockerfile-18.6` rebuilds `postgres:18.6`.
 
 A typical Dockerfile does three things:
 
-1. **Start from the official image** (`FROM postgres:18.6`, `FROM ghcr.io/getsentry/sentry:26.8.0`, and so on).
-2. **Upgrade the OS packages** so known CVEs in the base layer are patched (`apt-get upgrade` on Debian-based images, `apk upgrade` on Alpine).
-3. **Patch extra application dependencies when needed.** Some images (Sentry) also bump Python packages that the base image pins to vulnerable versions.
+1. **Start from the official image** (`FROM postgres:18.6`, `FROM apache/kafka:4.3.1`, and so on).
+2. **Upgrade the OS packages** so known CVEs in the base layer are patched (`apt-get upgrade` on Debian, `apk upgrade` on Alpine, `zypper update` on SLES). If the base image runs as a non-root user, switch to `root` for this step and restore the original user afterward.
+3. **Patch extra application dependencies when needed.** Some images bump pinned libraries or rebuild binaries that scanners flag (Go stdlib baked into `gosu`, SigNoz, Rancher, Sentry Python packages).
 
 The result is the same application, same major/minor version, with a smaller vulnerability surface.
 
@@ -26,16 +26,24 @@ The result is the same application, same major/minor version, with a smaller vul
 
 | Image | Upstream | Dockerfile | Extra hardening |
 | --- | --- | --- | --- |
-| PostgreSQL | `postgres:18.6` | [`postgres/Dockerfile-18.6`](postgres/Dockerfile-18.6) | Debian `apt-get upgrade` |
+| Kafka | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
+| PostgreSQL | `postgres:18.6` | [`postgres/Dockerfile-18.6`](postgres/Dockerfile-18.6) | Debian `apt-get upgrade` plus `gosu` rebuilt with a current Go toolchain |
+| Rancher | `rancher/rancher:v2.15.1` | [`rancher/Dockerfile-2.15.1`](rancher/Dockerfile-2.15.1) | SLES RPM update via BCI, rebuilt Go drivers/`etcdctl`, newer k3s overlay |
+| Redis | `redis:8.10.2` | [`redis/Dockerfile-8.10.2`](redis/Dockerfile-8.10.2) | Debian `apt-get upgrade`; runs as `redis` (UID 999) |
 | Sentry | `ghcr.io/getsentry/sentry:26.8.0` | [`sentry/Dockerfile-26.8.0`](sentry/Dockerfile-26.8.0) | Debian upgrades plus pinned Python package bumps |
-| SigNoz | `signoz/signoz:v0.142.1` | [`signoz/Dockerfile-0.142.1`](signoz/Dockerfile-0.142.1) | Alpine `apk upgrade` |
+| SigNoz | `signoz/signoz:v0.142.1` | [`signoz/Dockerfile-0.142.1`](signoz/Dockerfile-0.142.1) | Alpine `apk upgrade` plus the SigNoz binary rebuilt with a patched Go toolchain |
+
+Redis is intentionally non-root by default. Official `redis` starts as root and `gosu`-drops to `redis` at runtime (and chowns `/data` first). Bind-mounted data directories must be writable by UID 999, or use a Docker volume / Kubernetes `fsGroup: 999`.
 
 ## Build
 
 Build from the repository root. Tag the result however you publish it (local, GitHub Container Registry, a private registry, and so on).
 
 ```bash
+docker build -f kafka/Dockerfile-4.3.1 -t secured-images/kafka:4.3.1 kafka
 docker build -f postgres/Dockerfile-18.6 -t secured-images/postgres:18.6 postgres
+docker build -f rancher/Dockerfile-2.15.1 -t secured-images/rancher:2.15.1 rancher
+docker build -f redis/Dockerfile-8.10.2 -t secured-images/redis:8.10.2 redis
 docker build -f sentry/Dockerfile-26.8.0 -t secured-images/sentry:26.8.0 sentry
 docker build -f signoz/Dockerfile-0.142.1 -t secured-images/signoz:0.142.1 signoz
 ```
@@ -46,8 +54,8 @@ Use these tags in place of the official ones in Compose files, Helm charts, or K
 
 1. Create a directory named after the product (`nginx`, `redis`, …) if it does not already exist.
 2. Add a `Dockerfile-<version>` that starts `FROM` the official tag you want to harden.
-3. Run the OS package upgrade for that distro (`apt-get` or `apk`).
-4. If scanners still report vulnerable application libraries, pin upgraded versions in a follow-up `RUN` (same pattern as Sentry).
+3. Run the OS package upgrade for that distro (`apt-get`, `apk`, or `zypper`). If the base image is non-root, use `USER root` for the upgrade, then switch back.
+4. If scanners still report vulnerable application libraries, pin upgraded versions or rebuild binaries in a follow-up step (same pattern as Sentry, PostgreSQL `gosu`, SigNoz, and Rancher).
 5. Rebuild and scan the new image before you ship it.
 
 Keep the Dockerfile version in the filename aligned with the upstream tag so it is obvious which release each file hardens.

@@ -1,6 +1,6 @@
-# Rebuild the SigNoz binary with a patched Go toolchain and modules.
-# Trivy reports those CVEs against /root/signoz; apk upgrade cannot patch them.
-# Alpine 3.20 is EOSL, so the runtime is rebased onto a current Alpine.
+# Rebuild the SigNoz binary with a patched Go toolchain and golang.org/x
+# modules. stdlib and those Go deps are compiled into /root/signoz;
+# apk upgrade cannot patch them.
 FROM golang:1.25.13-bookworm AS signoz
 
 ARG TARGETARCH=amd64
@@ -13,19 +13,9 @@ WORKDIR /src
 
 RUN git clone --depth 1 --branch "${SIGNOZ_VERSION}" https://github.com/SigNoz/signoz.git .
 
-# Versions match Trivy fixed versions for the gobinary findings in v0.142.1.
 RUN go get \
         golang.org/x/net@v0.56.0 \
         golang.org/x/text@v0.39.0 \
-        golang.org/x/crypto@v0.56.0 \
-        google.golang.org/grpc@v1.83.2 \
-        github.com/openfga/openfga@v1.18.1 \
-        go.opentelemetry.io/otel@v1.45.0 \
-        go.opentelemetry.io/otel/sdk@v1.45.0 \
-        go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.45.0 \
-        go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.45.0 \
-        go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.45.0 \
-        go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc@v0.21.0 \
     && go mod tidy
 
 RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
@@ -38,17 +28,8 @@ RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
             -X github.com/SigNoz/signoz/ee/zeus.deprecatedURL=https://license.signoz.io" \
         -o /signoz .
 
-FROM alpine:3.24.1
+FROM signoz/signoz:v0.142.1
 
-RUN apk add --no-cache ca-certificates && \
-    apk upgrade --no-cache
-
-WORKDIR /root
-
-COPY --from=signoz/signoz:v0.142.1 /root/templates /root/templates
-COPY --from=signoz/signoz:v0.142.1 /etc/signoz/web /etc/signoz/web
 COPY --from=signoz /signoz /root/signoz
 
-RUN chmod 755 /root /root/signoz
-
-ENTRYPOINT ["./signoz", "server"]
+RUN apk update && apk upgrade && rm -rf /var/cache/apk/*

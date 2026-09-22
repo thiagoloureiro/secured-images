@@ -15,12 +15,15 @@ RUN mkdir -p /out
 WORKDIR /src/harvester
 RUN git clone --depth 1 --branch v1.0.8 \
         https://github.com/harvester/docker-machine-driver-harvester.git .
+# logging-operator's go.mod still requires pkg/sdk@v0.12.0; bumping both
+# with go get fails. Replace pkg/sdk onto the patched commit so Fluentd
+# injection is actually compiled in.
 RUN go get \
         kubevirt.io/api@v1.7.4 \
         kubevirt.io/client-go@v1.7.4 \
         kubevirt.io/kubevirt@v1.7.4 \
         github.com/kube-logging/logging-operator@v0.0.0-20260608145523-cf437d7f1e05 \
-        github.com/kube-logging/logging-operator/pkg/sdk@v0.0.0-20260608145523-cf437d7f1e05 \
+    && go mod edit -replace=github.com/kube-logging/logging-operator/pkg/sdk=github.com/kube-logging/logging-operator/pkg/sdk@v0.0.0-20260608145523-cf437d7f1e05 \
     && go mod tidy
 RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
         -trimpath \

@@ -1,0 +1,13 @@
+FROM registry.k8s.io/ingress-nginx/controller:v1.15.1@sha256:594ceea76b01c592858f803f9ff4d2cb40542cae2060410b2c95f75907d659e1
+
+# Official controller runs as www-data (UID 101); apk needs root.
+# apk upgrade can replace dumb-init, so re-apply NET_BIND_SERVICE afterward.
+USER root
+RUN apk update && apk upgrade && \
+    apk add --no-cache libcap && \
+    setcap cap_net_bind_service=+ep /nginx-ingress-controller && \
+    setcap cap_net_bind_service=+ep /usr/local/nginx/sbin/nginx && \
+    setcap cap_net_bind_service=+ep /usr/bin/dumb-init && \
+    apk del libcap && \
+    rm -rf /var/cache/apk/*
+USER www-data

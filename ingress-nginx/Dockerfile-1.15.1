@@ -1,8 +1,48 @@
+# Rebuild controller Go binaries with a current toolchain. Scanners report
+# "stdlib" against /nginx-ingress-controller, /dbg, and /wait-shutdown;
+# those versions are compiled in, so apk upgrade cannot patch them.
+FROM golang:1.27.1-bookworm AS controller
+
+ARG TARGETARCH=amd64
+ARG INGRESS_NGINX_REF=controller-v1.15.1
+ARG RELEASE=v1.15.1
+ARG REPO_INFO=https://github.com/kubernetes/ingress-nginx
+
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+ENV GOOS=linux
+ENV GOARCH=${TARGETARCH}
+
+WORKDIR /src
+
+RUN git clone --depth 1 --branch "${INGRESS_NGINX_REF}" \
+        https://github.com/kubernetes/ingress-nginx.git .
+
+RUN mkdir -p /out && \
+    COMMIT_SHA="git-$(git rev-parse --short HEAD)" && \
+    LDFLAGS="-buildid= -w -s \
+        -X k8s.io/ingress-nginx/version.RELEASE=${RELEASE} \
+        -X k8s.io/ingress-nginx/version.COMMIT=${COMMIT_SHA} \
+        -X k8s.io/ingress-nginx/version.REPO=${REPO_INFO}" && \
+    go build -trimpath -buildvcs=false -ldflags="${LDFLAGS}" \
+        -o /out/nginx-ingress-controller k8s.io/ingress-nginx/cmd/nginx && \
+    go build -trimpath -buildvcs=false -ldflags="${LDFLAGS}" \
+        -o /out/dbg k8s.io/ingress-nginx/cmd/dbg && \
+    go build -trimpath -buildvcs=false -ldflags="${LDFLAGS}" \
+        -o /out/wait-shutdown k8s.io/ingress-nginx/cmd/waitshutdown
+
 FROM registry.k8s.io/ingress-nginx/controller:v1.15.1@sha256:594ceea76b01c592858f803f9ff4d2cb40542cae2060410b2c95f75907d659e1
 
 # Official controller runs as www-data (UID 101); apk needs root.
 # apk upgrade can replace dumb-init, so re-apply NET_BIND_SERVICE afterward.
 USER root
+
+COPY --from=controller --chown=www-data:www-data \
+        /out/nginx-ingress-controller \
+        /out/dbg \
+        /out/wait-shutdown \
+        /
+
 RUN apk update && apk upgrade && \
     apk add --no-cache libcap && \
     setcap cap_net_bind_service=+ep /nginx-ingress-controller && \
@@ -10,4 +50,5 @@ RUN apk update && apk upgrade && \
     setcap cap_net_bind_service=+ep /usr/bin/dumb-init && \
     apk del libcap && \
     rm -rf /var/cache/apk/*
+
 USER www-data

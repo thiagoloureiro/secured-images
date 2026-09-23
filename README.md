@@ -18,7 +18,7 @@ A typical Dockerfile does three things:
 
 1. **Start from the official image** (`FROM postgres:18.6`, `FROM apache/kafka:4.3.1`, and so on).
 2. **Upgrade the OS packages** so known CVEs in the base layer are patched (`apt-get upgrade` on Debian, `apk upgrade` on Alpine, `dnf update` on Amazon Linux, `zypper update` on SLES). If the base image runs as a non-root user, switch to `root` for this step and restore the original user afterward.
-3. **Patch extra application dependencies when needed.** Some images bump pinned libraries or rebuild binaries that scanners flag (Go stdlib baked into `gosu`, SigNoz, Rancher, Sentry Python packages).
+3. **Patch extra application dependencies when needed.** Some images bump pinned libraries or rebuild binaries that scanners flag (Go stdlib baked into `gosu`, Ingress NGINX, SigNoz, Rancher, Sentry Python packages).
 
 The result is the same application, same major/minor version, with a smaller vulnerability surface.
 
@@ -76,7 +76,7 @@ Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiag
 | --- | --- | --- | --- |
 | Airflow | `apache/airflow:3.3.1` | [`airflow/Dockerfile-3.3.1`](airflow/Dockerfile-3.3.1) | Debian `apt-get upgrade` as root, then restore UID 50000 |
 | Airflow | `apache/airflow:3.3.2` | [`airflow/Dockerfile-3.3.2`](airflow/Dockerfile-3.3.2) | Debian `apt-get upgrade` as root, then restore UID 50000 |
-| Ingress NGINX | `registry.k8s.io/ingress-nginx/controller:v1.15.1` | [`ingress-nginx/Dockerfile-1.15.1`](ingress-nginx/Dockerfile-1.15.1) | Alpine `apk upgrade` as root, re-apply `NET_BIND_SERVICE`, restore `www-data` |
+| Ingress NGINX | `registry.k8s.io/ingress-nginx/controller:v1.15.1` | [`ingress-nginx/Dockerfile-1.15.1`](ingress-nginx/Dockerfile-1.15.1) | Alpine `apk upgrade` plus controller/`dbg`/`wait-shutdown` rebuilt with Go 1.27.1 |
 | Kafka | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
 | OpenSearch | `opensearchproject/opensearch:2.19.6` | [`opensearch/Dockerfile-2.19.6`](opensearch/Dockerfile-2.19.6) | Amazon Linux `dnf update`; replace netty-handler 4.1.138, bc-fips 2.1.3, jackson-databind 2.18.11 |
 | PostgreSQL | `postgres:18.6` | [`postgres/Dockerfile-18.6`](postgres/Dockerfile-18.6) | Debian `apt-get upgrade` plus `gosu` rebuilt with a current Go toolchain |

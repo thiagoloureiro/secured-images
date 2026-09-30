@@ -11,3 +11,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 USER airflow
+
+# Official image ships litellm 1.85.7; scanners flag CVEs fixed in 1.103.1.
+RUN python -m pip install --no-cache-dir --upgrade "litellm==1.103.1"

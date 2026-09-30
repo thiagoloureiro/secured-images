@@ -18,7 +18,7 @@ A typical Dockerfile does three things:
 
 1. **Start from the official image** (`FROM postgres:18.6`, `FROM apache/kafka:4.3.1`, and so on).
 2. **Upgrade the OS packages** so known CVEs in the base layer are patched (`apt-get upgrade` on Debian, `apk upgrade` on Alpine, `dnf update` on Amazon Linux, `zypper update` on SLES). If the base image runs as a non-root user, switch to `root` for this step and restore the original user afterward.
-3. **Patch extra application dependencies when needed.** Some images bump pinned libraries or rebuild binaries that scanners flag (Go stdlib baked into `gosu`, Ingress NGINX, SigNoz, Rancher, Sentry Python packages).
+3. **Patch extra application dependencies when needed.** Some images bump pinned libraries or rebuild binaries that scanners flag (Go stdlib baked into `gosu`, Ingress NGINX, SigNoz, Rancher, Sentry Python packages, Airflow `litellm`).
 
 The result is the same application, same major/minor version, with a smaller vulnerability surface.
 
@@ -79,8 +79,8 @@ Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiag
 
 | Image | Upstream | Dockerfile | Extra hardening |
 | --- | --- | --- | --- |
-| Airflow | `apache/airflow:3.3.1` | [`airflow/Dockerfile-3.3.1`](airflow/Dockerfile-3.3.1) | Debian `apt-get upgrade` as root, then restore UID 50000 |
-| Airflow | `apache/airflow:3.3.2` | [`airflow/Dockerfile-3.3.2`](airflow/Dockerfile-3.3.2) | Debian `apt-get upgrade` as root, then restore UID 50000 |
+| Airflow | `apache/airflow:3.3.1` | [`airflow/Dockerfile-3.3.1`](airflow/Dockerfile-3.3.1) | Debian `apt-get upgrade` as root, restore UID 50000, pin litellm 1.103.1 |
+| Airflow | `apache/airflow:3.3.2` | [`airflow/Dockerfile-3.3.2`](airflow/Dockerfile-3.3.2) | Debian `apt-get upgrade` as root, restore UID 50000, pin litellm 1.103.1 |
 | Ingress NGINX | `registry.k8s.io/ingress-nginx/controller:v1.15.1` | [`ingress-nginx/Dockerfile-1.15.1`](ingress-nginx/Dockerfile-1.15.1) | Alpine `apk upgrade` plus controller/`dbg`/`wait-shutdown` rebuilt with Go 1.27.1 |
 | Kafka | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
 | Memcached | `memcached:1.6.45` | [`memcached/Dockerfile-1.6.45`](memcached/Dockerfile-1.6.45) | Debian `apt-get upgrade` as root, then restore `memcache` (UID 11211) |

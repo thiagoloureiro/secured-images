@@ -12,5 +12,10 @@ RUN apt-get update && \
 
 USER airflow
 
-# Official image ships litellm 1.85.7; scanners flag CVEs fixed in 1.103.1.
-RUN python -m pip install --no-cache-dir --upgrade "litellm==1.103.1"
+# Official image ships litellm 1.85.7, urllib3 2.7.0, virtualenv 21.7.9,
+# and tornado 6.5.8; scanners flag CVEs fixed in these pins.
+RUN python -m pip install --no-cache-dir --upgrade \
+        "litellm==1.103.1" \
+        "urllib3>=2.8.0" \
+        "virtualenv>=21.14.2" \
+        "tornado>=6.5.10"

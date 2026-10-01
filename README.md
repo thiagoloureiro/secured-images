@@ -80,7 +80,7 @@ Published to Docker Hub as [`thiagoguaru/<name>`](https://hub.docker.com/u/thiag
 | Image | Upstream | Dockerfile | Extra hardening |
 | --- | --- | --- | --- |
 | Airflow | `apache/airflow:3.3.1` | [`airflow/Dockerfile-3.3.1`](airflow/Dockerfile-3.3.1) | Debian `apt-get upgrade` as root, restore UID 50000, pin litellm 1.103.1 |
-| Airflow | `apache/airflow:3.3.2` | [`airflow/Dockerfile-3.3.2`](airflow/Dockerfile-3.3.2) | Debian `apt-get upgrade` as root, restore UID 50000, pin litellm 1.103.1 |
+| Airflow | `apache/airflow:3.3.2` | [`airflow/Dockerfile-3.3.2`](airflow/Dockerfile-3.3.2) | Debian `apt-get upgrade` as root, restore UID 50000; pin litellm 1.103.1, urllib3 2.8, virtualenv 21.14.2, tornado 6.5.10 |
 | Ingress NGINX | `registry.k8s.io/ingress-nginx/controller:v1.15.1` | [`ingress-nginx/Dockerfile-1.15.1`](ingress-nginx/Dockerfile-1.15.1) | Alpine `apk upgrade` plus controller/`dbg`/`wait-shutdown` rebuilt with Go 1.27.1 |
 | Kafka | `apache/kafka:4.3.1` | [`kafka/Dockerfile-4.3.1`](kafka/Dockerfile-4.3.1) | Alpine `apk upgrade` as root, then restore `appuser` |
 | Memcached | `memcached:1.6.45` | [`memcached/Dockerfile-1.6.45`](memcached/Dockerfile-1.6.45) | Debian `apt-get upgrade` as root, then restore `memcache` (UID 11211) |

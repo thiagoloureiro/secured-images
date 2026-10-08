@@ -1,0 +1,28 @@
+# Rebuild gosu with a current Go toolchain. Scanners report "stdlib"
+# against /usr/local/bin/gosu; that Go runtime is baked into the binary,
+# so apt-get upgrade cannot patch it. Official gosu 1.19 is built with
+# Go 1.24.6 (CVE-2025-68121, CVE-2026-32281).
+FROM golang:1.27.1-bookworm AS gosu
+
+ENV CGO_ENABLED=0
+ARG GOSU_VERSION=1.19
+
+RUN set -eux; \
+    git clone --depth 1 --branch "${GOSU_VERSION}" https://github.com/tianon/gosu.git /src; \
+    cd /src; \
+    go build -trimpath -ldflags='-d -w' -o /gosu .
+
+FROM mongo:9.0.2
+
+COPY --from=gosu /gosu /usr/local/bin/gosu
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Official mongo starts as root and gosu-drops to mongodb at runtime.
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN gosu --version && gosu nobody true

@@ -13,14 +13,23 @@ RUN apt-get update && \
 USER airflow
 
 # Official image ships litellm 1.85.7, urllib3 2.7.0, virtualenv 21.7.9,
-# and tornado 6.5.8; scanners flag CVEs fixed in these pins.
+# tornado 6.5.8, msgpack 1.2.2, PyJWT 2.14.0, oauthlib 3.3.1, and uv 0.12.10.
+# Scanners flag CVEs fixed in these pins. setuptools is already 84.0.0;
+# keep the floor so leftover older copies get upgraded.
 RUN python -m pip install --no-cache-dir --upgrade \
         "litellm==1.103.1" \
         "urllib3>=2.8.0" \
         "virtualenv>=21.14.2" \
-        "tornado>=6.5.10"
+        "tornado>=6.5.10" \
+        "msgpack>=1.2.3" \
+        "setuptools>=84.0.0" \
+        "oauthlib>=4.0.0" \
+        "PyJWT>=2.15.1" \
+        "uv>=0.12.23"
 
+# pip vendors its own urllib3/msgpack; drop it after upgrades so scanners
+# do not keep reporting those copies.
 USER root
-RUN python -m pip uninstall --yes pip && rm -rf /root/.cache/pip
+RUN python -m pip uninstall --yes pip && rm -rf /root/.cache/pip /home/airflow/.cache/pip
 
 USER airflow

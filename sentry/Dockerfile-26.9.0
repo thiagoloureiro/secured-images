@@ -28,3 +28,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade \
         "djangorestframework>=3.17.2" \
         "PyJWT>=2.14.0" \
         "urllib3>=2.8.0"
+
+# pip vendors its own urllib3/msgpack; drop it after upgrades so scanners
+# do not keep reporting those copies.
+RUN python3 -m pip uninstall --yes pip && rm -rf /root/.cache/pip

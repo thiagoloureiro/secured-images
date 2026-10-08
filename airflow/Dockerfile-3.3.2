@@ -19,3 +19,4 @@ RUN python -m pip install --no-cache-dir --upgrade \
         "urllib3>=2.8.0" \
         "virtualenv>=21.14.2" \
         "tornado>=6.5.10"
+RUN python -m pip uninstall --yes pip && rm -rf /root/.cache/pip

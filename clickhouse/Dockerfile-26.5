@@ -1,0 +1,15 @@
+FROM clickhouse/clickhouse-server:26.5
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Official image runs as root; the entrypoint drops to clickhouse (UID 101).
+# Hold ClickHouse packages so apt upgrade patches Ubuntu without moving off 26.5.
+RUN set -eux; \
+    held="$(dpkg-query -W -f='${db:Status-Status} ${Package}\n' 'clickhouse*' | awk '$1=="installed" {print $2}')"; \
+    apt-mark hold $held; \
+    apt-get update; \
+    apt-get upgrade -y; \
+    apt-mark unhold $held; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*

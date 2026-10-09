@@ -1,0 +1,24 @@
+FROM ghcr.io/getsentry/snuba:26.8.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Official snuba runs as snuba (UID 1000); apt needs root, then restore snuba.
+USER root
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Official image ships PyJWT 2.13.0 in /.venv. 2.15.1 includes the fixes
+# through CVE-2026-102275. uv.lock is copied into the image and scanners
+# read it, so bump that pin to the installed version.
+RUN /.venv/bin/python -m pip install --no-cache-dir --upgrade "PyJWT>=2.15.1" && \
+    sed -i \
+        -e '/^name = "pyjwt"$/,/^\[/{s/^version = ".*"/version = "2.15.1"/;}' \
+        -e 's|pyjwt-2.13.0-py3-none-any.whl|pyjwt-2.15.1-py3-none-any.whl|' \
+        -e 's|66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728|42d59d631f7768a1028a64c7ff581a9bf7519804daf91fc5b6c56e30eec5e193|' \
+        /usr/src/snuba/uv.lock && \
+    /.venv/bin/python -c 'import jwt; assert jwt.__version__ >= "2.15.1", jwt.__version__'
+
+USER snuba

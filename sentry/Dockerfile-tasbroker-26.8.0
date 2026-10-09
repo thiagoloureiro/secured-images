@@ -1,0 +1,1 @@
+FROM ghcr.io/getsentry/taskbroker:26.8.0

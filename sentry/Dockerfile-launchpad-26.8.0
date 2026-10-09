@@ -1,0 +1,30 @@
+FROM ghcr.io/getsentry/launchpad:26.8.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Official launchpad runs as app (UID 1000); apt needs root, then restore app.
+USER root
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Official image ships PyJWT 2.13.0 in /.venv. 2.15.1 includes the fixes
+# through CVE-2026-102275. uv.lock is copied into the image and scanners
+# read it, so bump that pin to the installed version.
+RUN if /.venv/bin/python -m pip --version >/dev/null 2>&1; then \
+        /.venv/bin/python -m pip install --no-cache-dir --upgrade "PyJWT>=2.15.1"; \
+    else \
+        uv pip install --python /.venv/bin/python --no-cache "PyJWT>=2.15.1"; \
+    fi && \
+    sed -i \
+        -e '/^name = "pyjwt"$/,/^\[/{s/^version = ".*"/version = "2.15.1"/;}' \
+        -e 's|https://files.pythonhosted.org/packages/3b/81/58d0ac84e1ef3a3843791d6954d94c0b33d526c75eeb1efbce9d0a4c4077/pyjwt-2.13.0.tar.gz|https://files.pythonhosted.org/packages/43/ea/5194e52748b0da83d71e082d75496eaec6e58f419f5e184786ded517e6a9/pyjwt-2.15.1.tar.gz|' \
+        -e 's|41571c89ca91598c79e8ef18a2d07367d4810fbbd6f637794879baf1b7703423|4f259e80cdfb6b3fc18a7de51fd1ef9ec79652f25019bae68975ca2468a34df8|' \
+        -e 's|https://files.pythonhosted.org/packages/a3/5e/ecf12fdb62546d64385c158514e9b2b671f7832108ef2ecd2020ce0af2d1/pyjwt-2.13.0-py3-none-any.whl|https://files.pythonhosted.org/packages/50/ca/44de4e75f8aadc457f0634be3b542815078ded46dca30efb960edeecad6e/pyjwt-2.15.1-py3-none-any.whl|' \
+        -e 's|66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728|42d59d631f7768a1028a64c7ff581a9bf7519804daf91fc5b6c56e30eec5e193|' \
+        /app/uv.lock && \
+    /.venv/bin/python -c 'import jwt; assert jwt.__version__ >= "2.15.1", jwt.__version__'
+
+USER app

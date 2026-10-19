@@ -20,6 +20,12 @@ const tarballs = {
     '110eb1365a8135dc098b872a7ad1752220d6ae4661eeae974279310700d895f2',
   'handlebars-4.7.10.tgz':
     '14f356e6cadb5b064a156d2b39dd843abba8f4b1a38ee036935adecc1a13ad9f',
+  'nodemailer-10.1.7.tgz':
+    'b9163453a4bf2643f0f7fe398daeb39c4492e548c55c56b2517aec616d2a64cb',
+  'markdown-it-14.3.3.tgz':
+    '7191a8dc99822f327f6772f19f9ae8992c7b51f557eb85b8a3f9d18e703e2f3f',
+  'mdurl-2.1.0.tgz':
+    '23fc27c3d70e776c3aa40ec019c2be21ef43ed33b73f8476ada8715c5aabd11d',
 };
 
 const renames = [
@@ -27,6 +33,8 @@ const renames = [
   ['@simple-git+argv-parser@1.1.1', '@simple-git+argv-parser@2.0.1'],
   ['@simple-git+args-pathspec@1.0.3', '@simple-git+args-pathspec@1.0.4'],
   ['handlebars@4.7.9', 'handlebars@4.7.10'],
+  ['nodemailer@8.0.10', 'nodemailer@10.1.7'],
+  ['markdown-it@13.0.2', 'markdown-it@14.3.3'],
 ];
 
 function sha256(file) {
@@ -75,6 +83,8 @@ function assertVersions() {
     ['@simple-git/argv-parser', '2.0.1'],
     ['@simple-git/args-pathspec', '1.0.4'],
     ['handlebars', '4.7.10'],
+    ['nodemailer', '10.1.7'],
+    ['markdown-it', '14.3.3'],
   ]);
   const seen = new Map();
   function walk(dir) {
@@ -122,6 +132,25 @@ replacePackage(
   'simple-git-args-pathspec-1.0.4.tgz',
 );
 const handlebarsDir = replacePackage(path.join(root, 'handlebars'), 'handlebars-4.7.10.tgz');
+replacePackage(path.join(root, 'nodemailer'), 'nodemailer-10.1.7.tgz');
+const markdownItDir = replacePackage(path.join(pnpm, 'node_modules/markdown-it'), 'markdown-it-14.3.3.tgz');
+const markdownItModules = path.dirname(markdownItDir);
+function pointAt(name, relativeTarget) {
+  const link = path.join(markdownItModules, name);
+  fs.rmSync(link, { recursive: true, force: true });
+  fs.symlinkSync(relativeTarget, link);
+  const version = JSON.parse(fs.readFileSync(path.join(link, 'package.json'), 'utf8')).version;
+  console.log('linked', name, version);
+}
+// 14.3.3 needs entities 4, uc.micro 2, and punycode.js. Those copies are already
+// in the image. mdurl 2 is not, so it is unpacked beside markdown-it.
+pointAt('entities', '../../entities@4.5.0/node_modules/entities');
+pointAt('uc.micro', '../../uc.micro@2.1.0/node_modules/uc.micro');
+pointAt('punycode.js', '../../punycode.js@2.3.1/node_modules/punycode.js');
+const mdurlDir = path.join(markdownItModules, 'mdurl');
+fs.rmSync(mdurlDir, { recursive: true, force: true });
+fs.mkdirSync(mdurlDir);
+execFileSync('tar', ['-xzf', path.join(patches, 'mdurl-2.1.0.tgz'), '-C', mdurlDir, '--strip-components=1']);
 
 fs.appendFileSync(
   path.join(simpleGitDir, 'dist/index.cjs'),
@@ -236,6 +265,49 @@ try {
 const handlebars = require(path.join(root, 'handlebars'));
 if (handlebars.compile('Hello {{name}}')({ name: 'n8n' }) !== 'Hello n8n') {
   throw new Error('handlebars compile failed');
+}
+
+const n8nRequire = createRequire('/usr/local/lib/node_modules/n8n/package.json');
+const nodemailer = n8nRequire('nodemailer');
+const MailComposer = n8nRequire('nodemailer/lib/mail-composer');
+const addressparser = n8nRequire('nodemailer/lib/addressparser');
+const composer = importDefault(MailComposer).default;
+const parseAddress = importDefault(addressparser).default;
+if (typeof nodemailer.createTransport !== 'function' || typeof composer !== 'function' || typeof parseAddress !== 'function') {
+  throw new Error('nodemailer exports are not callable');
+}
+const addresses = parseAddress('Alice <alice@example.com>', { flatten: true });
+if (addresses[0]?.address !== 'alice@example.com') throw new Error('addressparser failed');
+const built = await new composer({
+  from: 'a@example.com',
+  to: 'b@example.com',
+  subject: 'hi',
+  text: 'hello',
+}).compile().build();
+if (!built.includes('Subject: hi')) throw new Error('mail composer failed');
+const sent = await nodemailer.createTransport({ jsonTransport: true }).sendMail({
+  from: 'a@example.com',
+  to: 'b@example.com',
+  subject: 'hi',
+  text: 'hello',
+});
+if (!sent.message.includes('"subject":"hi"')) throw new Error('json transport failed');
+
+const MarkdownIt = require(path.join(pnpm, 'node_modules/markdown-it'));
+const pluginDir = (prefix) => {
+  const name = fs.readdirSync(pnpm).find((entry) => entry.startsWith(prefix));
+  return path.join(pnpm, name, 'node_modules', prefix.slice(0, -1));
+};
+const linkAttributes = require(pluginDir('markdown-it-link-attributes@'));
+const emoji = require(pluginDir('markdown-it-emoji@'));
+const taskLists = require(pluginDir('markdown-it-task-lists@'));
+const rendered = new MarkdownIt({ html: false, linkify: true, typographer: true, breaks: true })
+  .use(linkAttributes, { attrs: { target: '_blank' } })
+  .use(emoji)
+  .use(taskLists)
+  .render('Hello **world** https://example.com\n\n- [ ] task');
+if (!rendered.includes('<strong>world</strong>') || !rendered.includes('task-list-item')) {
+  throw new Error('markdown-it render failed');
 }
 
 console.log('npm patches ok');

@@ -22,6 +22,8 @@ RUN set -eux; \
 # in allowEnvironment, so the Git node and source-control callers list the
 # variables they already set. The CJS build is given a default export because the
 # Git node loads simple-git through TypeScript's __importDefault helper.
+# nodemailer 10.1.7 and markdown-it 14.3.3 are the patched releases. 14.3.3 keeps
+# the utils API that markdown-it-emoji 2 uses; 15 removes it.
 COPY patch-npm.mjs /tmp/patch-npm.mjs
 RUN set -eux; \
     mkdir -p /tmp/npm-patches; \
@@ -29,7 +31,10 @@ RUN set -eux; \
       simple-git@4.0.1 \
       @simple-git/argv-parser@2.0.1 \
       @simple-git/args-pathspec@1.0.4 \
-      handlebars@4.7.10; \
+      handlebars@4.7.10 \
+      nodemailer@10.1.7 \
+      markdown-it@14.3.3 \
+      mdurl@2.1.0; \
     node /tmp/patch-npm.mjs; \
     rm -rf /tmp/npm-patches /tmp/patch-npm.mjs /root/.npm
 USER node

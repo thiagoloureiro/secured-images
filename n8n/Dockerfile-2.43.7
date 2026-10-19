@@ -1,0 +1,20 @@
+FROM alpine:3.24 AS apk
+RUN apk add --no-cache apk-tools-static
+
+FROM n8nio/n8n:2.43.7
+
+# Official image runs as node and deletes apk-tools. DHI hash-pins packages,
+# which blocks Alpine updates for openssl, curl, and other libs. The dhi.io
+# repo certificate is not trusted in this image, so upgrade from Alpine 3.24.
+USER root
+COPY --from=apk /sbin/apk.static /sbin/apk.static
+RUN set -eux; \
+    grep -v 'dhi.io' /etc/apk/repositories > /tmp/repositories; \
+    mv /tmp/repositories /etc/apk/repositories; \
+    sed -i 's/><Q1[^=]*=//' /etc/apk/world; \
+    ln -sf apk.static /sbin/apk; \
+    apk update; \
+    apk upgrade; \
+    rm -f /sbin/apk /sbin/apk.static; \
+    rm -rf /var/cache/apk/* /tmp/*
+USER node

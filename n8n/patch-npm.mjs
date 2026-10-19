@@ -26,6 +26,10 @@ const tarballs = {
     '7191a8dc99822f327f6772f19f9ae8992c7b51f557eb85b8a3f9d18e703e2f3f',
   'mdurl-2.1.0.tgz':
     '23fc27c3d70e776c3aa40ec019c2be21ef43ed33b73f8476ada8715c5aabd11d',
+  'toml-5.0.1.tgz':
+    'e9dd3f26a6f7c5fcfcf3fb13cca67f641da5c7fc144471c7ceec5accedbda323',
+  'ip-address-10.7.4.tgz':
+    'f9e1d0dd369c002f43770c6ee35942c8078e76d080a1e18e89113eef865f26ff',
 };
 
 const renames = [
@@ -35,6 +39,8 @@ const renames = [
   ['handlebars@4.7.9', 'handlebars@4.7.10'],
   ['nodemailer@8.0.10', 'nodemailer@10.1.7'],
   ['markdown-it@13.0.2', 'markdown-it@14.3.3'],
+  ['toml@3.0.0', 'toml@5.0.1'],
+  ['ip-address@10.3.1', 'ip-address@10.7.4'],
 ];
 
 function sha256(file) {
@@ -85,6 +91,8 @@ function assertVersions() {
     ['handlebars', '4.7.10'],
     ['nodemailer', '10.1.7'],
     ['markdown-it', '14.3.3'],
+    ['toml', '5.0.1'],
+    ['ip-address', '10.7.4'],
   ]);
   const seen = new Map();
   function walk(dir) {
@@ -134,6 +142,8 @@ replacePackage(
 const handlebarsDir = replacePackage(path.join(root, 'handlebars'), 'handlebars-4.7.10.tgz');
 replacePackage(path.join(root, 'nodemailer'), 'nodemailer-10.1.7.tgz');
 const markdownItDir = replacePackage(path.join(pnpm, 'node_modules/markdown-it'), 'markdown-it-14.3.3.tgz');
+replacePackage(path.join(pnpm, 'node_modules/toml'), 'toml-5.0.1.tgz');
+replacePackage(path.join(pnpm, 'node_modules/ip-address'), 'ip-address-10.7.4.tgz');
 const markdownItModules = path.dirname(markdownItDir);
 function pointAt(name, relativeTarget) {
   const link = path.join(markdownItModules, name);
@@ -309,5 +319,34 @@ const rendered = new MarkdownIt({ html: false, linkify: true, typographer: true,
 if (!rendered.includes('<strong>world</strong>') || !rendered.includes('task-list-item')) {
   throw new Error('markdown-it render failed');
 }
+
+const snowflakeDir = fs.readdirSync(pnpm).find((name) => name.startsWith('snowflake-sdk@'));
+const toml = createRequire(
+  path.join(pnpm, snowflakeDir, 'node_modules/snowflake-sdk/package.json'),
+)('toml');
+const config = toml.parse('account = "xy12345"\n[connections.default]\nuser = "n8n"\nport = 443\n');
+if (config.account !== 'xy12345' || config.connections.default.port !== 443) {
+  throw new Error('toml parse failed');
+}
+let nested = '1';
+for (let i = 0; i < 800; i += 1) nested = `[${nested}]`;
+try {
+  toml.parse(`a = ${nested}`);
+  throw new Error('deep toml nesting was accepted');
+} catch (error) {
+  if (error instanceof RangeError || String(error.message).includes('deep toml nesting was accepted')) {
+    throw error;
+  }
+}
+
+const socksDir = fs.readdirSync(pnpm).find((name) => name.startsWith('socks@'));
+const { Address4, Address6 } = createRequire(path.join(pnpm, socksDir, 'node_modules/socks/package.json'))(
+  'ip-address',
+);
+if (new Address4('8.8.8.8').correctForm() !== '8.8.8.8') throw new Error('Address4 failed');
+const fromBytes = Address6.fromByteArray([0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+if (!fromBytes.canonicalForm().startsWith('2001:0db8:')) throw new Error('Address6.fromByteArray failed');
+if (Address4.isValid('012.0.0.1')) throw new Error('leading-zero Address4 was accepted');
+if (!new Address6('64:ff9b:1::1').isPrivate()) throw new Error('NAT64 local-use was not private');
 
 console.log('npm patches ok');

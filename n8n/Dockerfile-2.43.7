@@ -17,4 +17,19 @@ RUN set -eux; \
     apk upgrade; \
     rm -f /sbin/apk /sbin/apk.static; \
     rm -rf /var/cache/apk/* /tmp/*
+# simple-git 4.0.1 blocks trailer.<key>.cmd. argv-parser 2.0.1 treats VISUAL as an
+# unsafe editor. simple-git 4 also rejects GIT_* env values unless they are named
+# in allowEnvironment, so the Git node and source-control callers list the
+# variables they already set. The CJS build is given a default export because the
+# Git node loads simple-git through TypeScript's __importDefault helper.
+COPY patch-npm.mjs /tmp/patch-npm.mjs
+RUN set -eux; \
+    mkdir -p /tmp/npm-patches; \
+    npm pack --pack-destination /tmp/npm-patches \
+      simple-git@4.0.1 \
+      @simple-git/argv-parser@2.0.1 \
+      @simple-git/args-pathspec@1.0.4 \
+      handlebars@4.7.10; \
+    node /tmp/patch-npm.mjs; \
+    rm -rf /tmp/npm-patches /tmp/patch-npm.mjs /root/.npm
 USER node

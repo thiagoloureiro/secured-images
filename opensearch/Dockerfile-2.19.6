@@ -6,12 +6,24 @@ USER root
 # 2.19.6 still ships netty-handler / netty-handler-proxy 4.1.135, bc-fips 2.1.2,
 # bcprov/bcpkix-jdk18on 1.84, bcprov-jdk15to18 1.84, bcpkix/bcutil-jdk15to18 1.79,
 # jackson-core 2.18.8, and jackson-databind 2.18.8 / 2.18.2 / 2.14.1.
+# Performance Analyzer RCA also ships bcprov-jdk15to18 1.79 (GOSTCTR, fixed in 1.84).
 # Stay on the same minor lines OpenSearch already uses.
 # jackson-annotations 2.14.1 is bumped with databind so plugin classpaths stay valid.
-# netty-handler 4.1.138 covers CVE-2026-75595 (fixed in 4.1.137); BC 1.86 covers
-# CVE-2026-8763 (fixed in 1.85). Scanners often label jdk18on as jdk15on.
+# netty-handler 4.1.138 covers CVE-2026-75595 (fixed in 4.1.137). The 4.1.130 copy
+# shaded into filtered-security-analytics-commons is overwritten in place, along
+# with the other Netty modules in that jar. BC 1.86 covers CVE-2026-8763
+# (fixed in 1.85) and the GOSTCTR fix. Scanners often label jdk18on as jdk15on.
 ARG NETTY_HANDLER_VERSION=4.1.138.Final
 ARG NETTY_HANDLER_SHA256=a79fb814e029db17da82baea25a0340172af2c59f107fd20b394c1fa28680f21
+ARG NETTY_BUFFER_SHA256=5bef3ea2b9e80c5e8d03151ca1609bd75fd1e264863bf3e2f8d538392c0f2c38
+ARG NETTY_CODEC_SHA256=21b9b7717da9ed7034c7a9ef4fcea4a08825e8f52d775da4d898364edf99327f
+ARG NETTY_CODEC_HTTP_SHA256=7d9000e53c8e37504be42b8dd7b646a7d1c73ad2cf801527fe3c6301880fe06f
+ARG NETTY_CODEC_HTTP2_SHA256=c7521231535c252903d9e424e162f789b5b55b0b0799628ea466a9b3daf49dae
+ARG NETTY_COMMON_SHA256=b4ebb8fa44cd5790731928a83fd0f25a530e41c407c093bef4a0196db30b693f
+ARG NETTY_RESOLVER_SHA256=50c338a0e5c9997513e738f0fcb47d579a9e8852d317ba367f5d141e210187c0
+ARG NETTY_TRANSPORT_SHA256=6c064c1cae4d410b920abfc07959a49db1b4778a9547614373e97d31cab0cad6
+ARG NETTY_TRANSPORT_EPOLL_SHA256=a3caf181f3af1665a7cd8b5d409ffe425308da49bf9297482df3942411a7707c
+ARG NETTY_TRANSPORT_UNIX_SHA256=8d1ada8f185d6f6da4cd79f9daeef39f1db49908cfec8bc2a1fb602458aa2341
 ARG NETTY_HANDLER_PROXY_VERSION=4.1.138.Final
 ARG NETTY_HANDLER_PROXY_SHA256=fd26635e06af15b2dd3f7502a195dc19fcd451264948a8707fb26f60e4d510b9
 ARG BC_FIPS_VERSION=2.1.3
@@ -31,8 +43,26 @@ ARG JACKSON_CORE_SHA256=825fa72dfb9e2f8a642322f1390dbac22c30d15ebd6dc6b377215882
 
 COPY replace-jars.py /tmp/replace-jars.py
 
-RUN curl -fsSL -o "/tmp/netty-handler-${NETTY_HANDLER_VERSION}.jar" \
+RUN     curl -fsSL -o "/tmp/netty-handler-${NETTY_HANDLER_VERSION}.jar" \
         "https://repo1.maven.org/maven2/io/netty/netty-handler/${NETTY_HANDLER_VERSION}/netty-handler-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-buffer-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-buffer/${NETTY_HANDLER_VERSION}/netty-buffer-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-codec-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-codec/${NETTY_HANDLER_VERSION}/netty-codec-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-codec-http-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-codec-http/${NETTY_HANDLER_VERSION}/netty-codec-http-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-codec-http2-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-codec-http2/${NETTY_HANDLER_VERSION}/netty-codec-http2-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-common-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-common/${NETTY_HANDLER_VERSION}/netty-common-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-resolver-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-resolver/${NETTY_HANDLER_VERSION}/netty-resolver-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-transport-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-transport/${NETTY_HANDLER_VERSION}/netty-transport-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-transport-classes-epoll-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-transport-classes-epoll/${NETTY_HANDLER_VERSION}/netty-transport-classes-epoll-${NETTY_HANDLER_VERSION}.jar" && \
+    curl -fsSL -o "/tmp/netty-transport-native-unix-common-${NETTY_HANDLER_VERSION}.jar" \
+        "https://repo1.maven.org/maven2/io/netty/netty-transport-native-unix-common/${NETTY_HANDLER_VERSION}/netty-transport-native-unix-common-${NETTY_HANDLER_VERSION}.jar" && \
     curl -fsSL -o "/tmp/netty-handler-proxy-${NETTY_HANDLER_PROXY_VERSION}.jar" \
         "https://repo1.maven.org/maven2/io/netty/netty-handler-proxy/${NETTY_HANDLER_PROXY_VERSION}/netty-handler-proxy-${NETTY_HANDLER_PROXY_VERSION}.jar" && \
     curl -fsSL -o "/tmp/bc-fips-${BC_FIPS_VERSION}.jar" \
@@ -54,6 +84,15 @@ RUN curl -fsSL -o "/tmp/netty-handler-${NETTY_HANDLER_VERSION}.jar" \
     curl -fsSL -o "/tmp/jackson-core-${JACKSON_CORE_VERSION}.jar" \
         "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/${JACKSON_CORE_VERSION}/jackson-core-${JACKSON_CORE_VERSION}.jar" && \
     echo "${NETTY_HANDLER_SHA256}  /tmp/netty-handler-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_BUFFER_SHA256}  /tmp/netty-buffer-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_CODEC_SHA256}  /tmp/netty-codec-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_CODEC_HTTP_SHA256}  /tmp/netty-codec-http-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_CODEC_HTTP2_SHA256}  /tmp/netty-codec-http2-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_COMMON_SHA256}  /tmp/netty-common-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_RESOLVER_SHA256}  /tmp/netty-resolver-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_TRANSPORT_SHA256}  /tmp/netty-transport-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_TRANSPORT_EPOLL_SHA256}  /tmp/netty-transport-classes-epoll-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
+    echo "${NETTY_TRANSPORT_UNIX_SHA256}  /tmp/netty-transport-native-unix-common-${NETTY_HANDLER_VERSION}.jar" | sha256sum -c && \
     echo "${NETTY_HANDLER_PROXY_SHA256}  /tmp/netty-handler-proxy-${NETTY_HANDLER_PROXY_VERSION}.jar" | sha256sum -c && \
     echo "${BC_FIPS_SHA256}  /tmp/bc-fips-${BC_FIPS_VERSION}.jar" | sha256sum -c && \
     echo "${BCPROV_SHA256}  /tmp/bcprov-jdk15to18-${BCPROV_VERSION}.jar" | sha256sum -c && \
@@ -66,7 +105,7 @@ RUN curl -fsSL -o "/tmp/netty-handler-${NETTY_HANDLER_VERSION}.jar" \
     echo "${JACKSON_CORE_SHA256}  /tmp/jackson-core-${JACKSON_CORE_VERSION}.jar" | sha256sum -c && \
     python3 /tmp/replace-jars.py && \
     rm -f /tmp/replace-jars.py \
-          /tmp/netty-handler-*.jar \
+          /tmp/netty-*.jar \
           /tmp/bc-fips-*.jar \
           /tmp/bcprov-jdk15to18-*.jar \
           /tmp/bcprov-jdk18on-*.jar \

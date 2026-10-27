@@ -1,9 +1,12 @@
-# Rebuild Go binaries that scanners flag for the Go stdlib and for
-# kubevirt client-go. Those versions are compiled into the binaries;
-# zypper cannot patch them.
-FROM golang:1.27.1-bookworm AS gobinaries
+# Rebuild Go binaries whose stdlib or module versions scanners flag.
+# zypper cannot patch versions compiled into a binary.
+#
+# CVE-2026-111943 and CVE-2026-78667 are fixed in Go 1.27.3.
+# CVE-2026-78669 is fixed in golang.org/x/net v0.60.0.
+# CVE-2026-54680 is fixed in logging-operator cf437d7 (6.6.0).
+FROM golang:1.27.3-bookworm AS gobinaries
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 ENV CGO_ENABLED=0
 ENV GOTOOLCHAIN=local
 
@@ -18,16 +21,36 @@ RUN --mount=type=secret,id=extra-ca,required=false \
 
 RUN mkdir -p /out
 
-# docker-machine-driver-harvester v1.0.9 already requires kubevirt api
-# and kubevirt 1.7.4, but still vendors client-go 1.7.0. Rebuild with
-# Go 1.27.1 for the stdlib. logging-operator 6.6.0 needs
-# controller-runtime 0.23+, which does not compile against the
-# Kubernetes 0.33 replaces in this module, so leave that dependency.
+# docker-machine-driver-harvester v1.0.9 vendors client-go 1.7.0 and
+# logging-operator from before the Fluentd injection fix. 6.6.0's SDK
+# calls the controller-runtime 0.23 webhook API, which does not compile
+# against this driver's Kubernetes 0.33 replaces, so keep
+# controller-runtime 0.21 and point that one call at the older builder.
+# The injection fix in the Fluentd renderer is unchanged.
 WORKDIR /src/harvester
 RUN git clone --depth 1 --branch v1.0.9 \
         https://github.com/harvester/docker-machine-driver-harvester.git .
-RUN go get kubevirt.io/client-go@v1.7.4 && go mod tidy
+ARG LOGGING_OPERATOR=v0.0.0-20260608145523-cf437d7f1e05
+RUN go mod edit \
+        -replace=github.com/kube-logging/logging-operator=github.com/kube-logging/logging-operator@${LOGGING_OPERATOR} \
+        -replace=github.com/kube-logging/logging-operator/pkg/sdk=github.com/kube-logging/logging-operator/pkg/sdk@${LOGGING_OPERATOR} \
+        -replace=github.com/kube-logging/logging-operator/pkg/sdk/logging/model/syslogng/config=github.com/kube-logging/logging-operator/pkg/sdk/logging/model/syslogng/config@${LOGGING_OPERATOR} \
+        -replace=sigs.k8s.io/controller-runtime=sigs.k8s.io/controller-runtime@v0.21.0 \
+        -replace=github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring=github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.82.0 \
+    && go get \
+        kubevirt.io/client-go@v1.7.4 \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy \
+    && sdk="$(go list -m -f '{{.Dir}}' github.com/kube-logging/logging-operator/pkg/sdk)" \
+    && chmod -R u+w "${sdk}" \
+    && sed -i 's/ctrl.NewWebhookManagedBy(mgr, apiType)/ctrl.NewWebhookManagedBy(mgr).For(apiType)/' \
+        "${sdk}/logging/api/v1beta1/conversion.go" \
+    && grep -q 'NewWebhookManagedBy(mgr).For(apiType)' \
+        "${sdk}/logging/api/v1beta1/conversion.go"
 RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -mod=mod \
         -trimpath \
         -ldflags="-s -w -X main.VERSION=v1.0.9 -extldflags -static" \
         -o /out/docker-machine-driver-harvester .
@@ -37,26 +60,234 @@ WORKDIR /src/linode
 RUN git clone --depth 1 --branch v0.1.16 \
         https://github.com/linode/docker-machine-driver-linode.git .
 RUN go get \
-        golang.org/x/crypto@v0.56.0 \
-        golang.org/x/net@v0.57.0 \
-        golang.org/x/text@v0.41.0 \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
     && go mod tidy
 RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -mod=mod \
         -trimpath \
         -ldflags="-s -w" \
         -o /out/docker-machine-driver-linode .
 
-# etcdctl v3.6.12 was built with Go 1.25.10
+# etcdctl is its own module. Bumping the repo root does not change it,
+# and v3.6.12 still links golang.org/x/net v0.52.0.
 WORKDIR /src/etcd
 RUN git clone --depth 1 --branch v3.6.12 https://github.com/etcd-io/etcd.git .
+WORKDIR /src/etcd/etcdctl
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
 RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
-        -C etcdctl \
+        -mod=mod \
         -trimpath \
         -ldflags="-s -w" \
         -o /out/etcdctl .
 
-# k3s v1.36.2 was built with Go 1.26.4. v1.36.5+k3s1 is the same 1.36
-# line, built with Go 1.26.8, which patches stdlib in k3s/containerd/runc/cni.
+# rancher-machine v0.15.0-rancher145.2 ships as a Go 1.26.8 binary.
+WORKDIR /src/machine
+RUN git clone --depth 1 --branch v0.15.0-rancher145.2 \
+        https://github.com/rancher/machine.git .
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
+RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -mod=mod \
+        -trimpath \
+        -ldflags="-s -w -X github.com/rancher/machine/version.Version=v0.15.0-rancher145.2" \
+        -o /out/rancher-machine ./cmd/rancher-machine
+
+# Rancher server was built with Go 1.26.8 and golang.org/x/net v0.58.0.
+FROM golang:1.27.3-bookworm AS rancherbin
+ARG TARGETARCH
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /usr/local/share/ca-certificates/extra-ca.crt && \
+        update-ca-certificates; \
+    fi
+WORKDIR /src/rancher
+RUN git clone --depth 1 --branch v2.15.2 https://github.com/rancher/rancher.git .
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
+RUN mkdir -p /out \
+    && GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -p 1 \
+        -mod=mod \
+        -trimpath \
+        -tags k8s \
+        -ldflags="-s -w -X github.com/rancher/rancher/pkg/version.Version=v2.15.2" \
+        -o /out/rancher .
+
+# k3s v1.36.5+k3s1 was built with Go 1.26.8 and replaces x/net with v0.55.0.
+# No newer 1.36 image is published with Go 1.26.10, so rebuild the server
+# binary. Pure-Go sqlite (no libsqlite3 tag) keeps the build static.
+FROM golang:1.27.3-bookworm AS k3sbuild
+ARG TARGETARCH
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /usr/local/share/ca-certificates/extra-ca.crt && \
+        update-ca-certificates; \
+    fi
+WORKDIR /src/k3s
+RUN git clone --depth 1 --branch 'v1.36.5+k3s1' https://github.com/k3s-io/k3s.git .
+RUN go mod edit \
+        -replace=golang.org/x/crypto=golang.org/x/crypto@v0.57.0 \
+        -replace=golang.org/x/net=golang.org/x/net@v0.60.0 \
+        -replace=golang.org/x/text=golang.org/x/text@v0.42.0 \
+    && go mod tidy
+# Charts and aux files are not in git. scripts/download fills build/static
+# before the embed copy that the server binary expects.
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL -o /usr/local/bin/yq \
+        "https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_${TARGETARCH}" \
+    && chmod +x /usr/local/bin/yq \
+    && OS=linux ARCH="${TARGETARCH}" ./scripts/download \
+    && mkdir -p pkg/deploy/embed pkg/static/embed \
+    && cp -a manifests/. pkg/deploy/embed/ \
+    && cp -a build/static/. pkg/static/embed/
+# btrfs is cgo-only and k3s uses overlayfs. gspt is cgo-only and only
+# rewrites the process title, so replace it with a no-op and stay static
+# on the pure-Go sqlite driver.
+RUN sed -i '/snapshots\/btrfs\/plugin/d' pkg/containerd/builtins_linux.go \
+    && printf '%s\n' '//go:build linux' '' 'package proctitle' '' 'func SetProcTitle(title string) {}' \
+        > pkg/proctitle/proctile.go \
+    && mkdir -p /out \
+    && GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -p 1 \
+        -mod=mod \
+        -trimpath \
+        -tags "ctrd netgo osusergo providerless urfave_cli_no_docs sqlite_omit_load_extension" \
+        -ldflags="-s -w -X github.com/k3s-io/k3s/pkg/version.Version=v1.36.5+k3s1" \
+        -o /out/k3s ./cmd/server
+
+# containerd and its runc shim ship beside k3s and were built with the same
+# Go 1.26.8 toolchain. x/net in the shim is v0.55.0.
+FROM golang:1.27.3-bookworm AS containerd
+ARG TARGETARCH
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /usr/local/share/ca-certificates/extra-ca.crt && \
+        update-ca-certificates; \
+    fi
+WORKDIR /src/containerd
+RUN git clone --depth 1 --branch v2.3.4-k3s1.36 https://github.com/k3s-io/containerd.git .
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
+# The btrfs snapshotter is imported unconditionally but its sources are
+# cgo-only. k3s uses overlayfs, so drop that import and stay static.
+RUN sed -i '/snapshots\/btrfs\/plugin/d' cmd/containerd/builtins/builtins_linux.go \
+    && mkdir -p /out \
+    && GOOS=linux GOARCH="${TARGETARCH}" go build -p 1 -mod=mod -trimpath \
+        -ldflags="-s -w" -o /out/containerd ./cmd/containerd \
+    && GOOS=linux GOARCH="${TARGETARCH}" go build -mod=mod -trimpath \
+        -ldflags="-s -w" -o /out/containerd-shim-runc-v2 ./cmd/containerd-shim-runc-v2
+
+# runc v1.4.2 was built with Go 1.26.8 and golang.org/x/net v0.43.0.
+# Keep seccomp support and link it statically.
+FROM golang:1.27.3-bookworm AS runc
+ARG TARGETARCH
+ENV GOTOOLCHAIN=local
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /usr/local/share/ca-certificates/extra-ca.crt && \
+        update-ca-certificates; \
+    fi
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc libc6-dev libseccomp-dev pkg-config make \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src/runc
+RUN git clone --depth 1 --branch v1.4.2 https://github.com/opencontainers/runc.git .
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
+RUN mkdir -p /out \
+    && CGO_ENABLED=1 GOOS=linux GOARCH="${TARGETARCH}" \
+        go build -mod=mod -trimpath -tags seccomp \
+        -ldflags="-s -w -extldflags -static" \
+        -o /out/runc .
+
+# bandwidth and firewall in the k3s image are symlinks to this multicall binary.
+FROM golang:1.27.3-bookworm AS cni
+ARG TARGETARCH
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /usr/local/share/ca-certificates/extra-ca.crt && \
+        update-ca-certificates; \
+    fi
+WORKDIR /src/plugins
+RUN git clone --depth 1 --branch v1.9.1-k3s1 https://github.com/rancher/plugins.git .
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
+RUN mkdir -p /out \
+    && GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -mod=mod \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/cni .
+
+# Dashboard assets are the binaries nodes download. They are still Go 1.26.7
+# and 1.27.1, so a filesystem scan keeps the stdlib findings until these
+# are rebuilt too.
+FROM golang:1.27.3-bookworm AS agents
+ARG TARGETARCH
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /usr/local/share/ca-certificates/extra-ca.crt && \
+        update-ca-certificates; \
+    fi
+WORKDIR /src/system-agent
+RUN git clone --depth 1 --branch v0.15.2 https://github.com/rancher/system-agent.git .
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
+RUN mkdir -p /out \
+    && GOOS=linux GOARCH=amd64 go build -p 1 -mod=mod -trimpath \
+        -ldflags="-s -w -X github.com/rancher/system-agent/pkg/version.Version=v0.15.2" \
+        -o /out/rancher-system-agent-amd64 . \
+    && GOOS=linux GOARCH=arm64 go build -p 1 -mod=mod -trimpath \
+        -ldflags="-s -w -X github.com/rancher/system-agent/pkg/version.Version=v0.15.2" \
+        -o /out/rancher-system-agent-arm64 .
+WORKDIR /src/wins
+RUN git clone --depth 1 --branch v0.15.2 https://github.com/rancher/wins.git .
+RUN go get \
+        golang.org/x/crypto@v0.57.0 \
+        golang.org/x/net@v0.60.0 \
+        golang.org/x/text@v0.42.0 \
+    && go mod tidy
+RUN GOOS=windows GOARCH=amd64 go build -p 1 -mod=mod -trimpath \
+        -ldflags="-s -w -X github.com/rancher/wins/pkg/defaults.AppVersion=v0.15.2" \
+        -o /out/wins.exe ./cmd
+
+# Upstream still copies k3s v1.36.2 into rancher. Take symlinks and the
+# remaining bins from v1.36.5, then overwrite the ones rebuilt above.
 FROM rancher/k3s:v1.36.5-k3s1 AS k3s
 
 # rancher/rancher is SUSE BCI Micro: no zypper in the final image. Patch
@@ -87,8 +318,25 @@ COPY --from=k3s \
         /bin/k3s \
         /bin/runc \
         /usr/bin/
+COPY --from=k3sbuild /out/k3s /usr/bin/k3s
+COPY --from=containerd /out/containerd /usr/bin/containerd
+COPY --from=containerd /out/containerd-shim-runc-v2 /usr/bin/containerd-shim-runc-v2
+COPY --from=runc /out/runc /usr/bin/runc
+COPY --from=cni /out/cni /usr/bin/cni
+# bandwidth and firewall are multicall names of cni. COPY follows the
+# upstream symlinks and would otherwise leave the old binaries in place.
+RUN ln -sfn cni /usr/bin/bandwidth && ln -sfn cni /usr/bin/firewall
+COPY --from=rancherbin /out/rancher /usr/bin/rancher
 COPY --from=gobinaries /out/docker-machine-driver-harvester \
         /opt/drivers/management-state/bin/docker-machine-driver-harvester
 COPY --from=gobinaries /out/docker-machine-driver-linode \
         /opt/drivers/management-state/bin/docker-machine-driver-linode
 COPY --from=gobinaries /out/etcdctl /usr/bin/etcdctl
+COPY --from=gobinaries /out/rancher-machine /usr/bin/rancher-machine
+COPY --from=agents \
+        /out/rancher-system-agent-amd64 \
+        /usr/share/rancher/ui-dashboard/assets/rancher-system-agent-amd64
+COPY --from=agents \
+        /out/rancher-system-agent-arm64 \
+        /usr/share/rancher/ui-dashboard/assets/rancher-system-agent-arm64
+COPY --from=agents /out/wins.exe /usr/share/rancher/ui-dashboard/assets/wins.exe

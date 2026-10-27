@@ -1,0 +1,94 @@
+# Rebuild Go binaries that scanners flag for the Go stdlib and for
+# kubevirt client-go. Those versions are compiled into the binaries;
+# zypper cannot patch them.
+FROM golang:1.27.1-bookworm AS gobinaries
+
+ARG TARGETARCH=amd64
+ENV CGO_ENABLED=0
+ENV GOTOOLCHAIN=local
+
+# Optional trust anchor for build networks that intercept TLS. Not copied
+# into the image. Pass it with:
+#   docker build --secret id=extra-ca,src=ca.pem ...
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /usr/local/share/ca-certificates/extra-ca.crt && \
+        update-ca-certificates; \
+    fi
+
+RUN mkdir -p /out
+
+# docker-machine-driver-harvester v1.0.9 already requires kubevirt api
+# and kubevirt 1.7.4, but still vendors client-go 1.7.0. Rebuild with
+# Go 1.27.1 for the stdlib. logging-operator 6.6.0 needs
+# controller-runtime 0.23+, which does not compile against the
+# Kubernetes 0.33 replaces in this module, so leave that dependency.
+WORKDIR /src/harvester
+RUN git clone --depth 1 --branch v1.0.9 \
+        https://github.com/harvester/docker-machine-driver-harvester.git .
+RUN go get kubevirt.io/client-go@v1.7.4 && go mod tidy
+RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -trimpath \
+        -ldflags="-s -w -X main.VERSION=v1.0.9 -extldflags -static" \
+        -o /out/docker-machine-driver-harvester .
+
+# linode driver was built with Go 1.26.1
+WORKDIR /src/linode
+RUN git clone --depth 1 --branch v0.1.16 \
+        https://github.com/linode/docker-machine-driver-linode.git .
+RUN go get \
+        golang.org/x/crypto@v0.56.0 \
+        golang.org/x/net@v0.57.0 \
+        golang.org/x/text@v0.41.0 \
+    && go mod tidy
+RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/docker-machine-driver-linode .
+
+# etcdctl v3.6.12 was built with Go 1.25.10
+WORKDIR /src/etcd
+RUN git clone --depth 1 --branch v3.6.12 https://github.com/etcd-io/etcd.git .
+RUN GOOS=linux GOARCH="${TARGETARCH}" go build \
+        -C etcdctl \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/etcdctl .
+
+# k3s v1.36.2 was built with Go 1.26.4. v1.36.5+k3s1 is the same 1.36
+# line, built with Go 1.26.8, which patches stdlib in k3s/containerd/runc/cni.
+FROM rancher/k3s:v1.36.5-k3s1 AS k3s
+
+# rancher/rancher is SUSE BCI Micro: no zypper in the final image. Patch
+# SLES RPMs from a bci-base builder via --installroot, then overlay.
+FROM rancher/rancher:v2.15.2 AS rancher
+
+FROM registry.suse.com/bci/bci-base:15.7 AS patch
+COPY --from=rancher / /chroot/
+RUN --mount=type=secret,id=extra-ca,required=false \
+    if [ -s /run/secrets/extra-ca ]; then \
+        cp /run/secrets/extra-ca /etc/pki/trust/anchors/extra-ca.crt && \
+        update-ca-certificates; \
+    fi && \
+    zypper refresh && \
+    zypper --installroot /chroot -n --gpg-auto-import-keys update && \
+    zypper --installroot /chroot clean -a && \
+    rm -rf /chroot/var/cache/zypp/* /chroot/var/log/zypp/* \
+           /chroot/tmp/* /chroot/var/tmp/* /chroot/usr/share/doc/packages/*
+
+FROM rancher/rancher:v2.15.2
+COPY --from=patch /chroot/ /
+COPY --from=k3s \
+        /bin/bandwidth \
+        /bin/cni \
+        /bin/containerd \
+        /bin/containerd-shim-runc-v2 \
+        /bin/firewall \
+        /bin/k3s \
+        /bin/runc \
+        /usr/bin/
+COPY --from=gobinaries /out/docker-machine-driver-harvester \
+        /opt/drivers/management-state/bin/docker-machine-driver-harvester
+COPY --from=gobinaries /out/docker-machine-driver-linode \
+        /opt/drivers/management-state/bin/docker-machine-driver-linode
+COPY --from=gobinaries /out/etcdctl /usr/bin/etcdctl

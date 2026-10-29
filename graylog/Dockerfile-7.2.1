@@ -1,13 +1,68 @@
+# Ubuntu 24.04 fixes CVE-2026-111497 as libbrotli1 1.1.0-2ubuntu0.1
+# (USN-8956-1). The upstream version stays 1.1.0, and scanners that match
+# Google Brotli 1.0.3 through 1.2.0 keep reporting it. 1.2.1 is the fixed
+# upstream release. SONAME stays libbrotli*.so.1, so existing binaries keep
+# loading the library.
+FROM ubuntu:24.04 AS brotli
+
+ENV DEBIAN_FRONTEND=noninteractive
+ARG BROTLI_VERSION=1.2.1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      ca-certificates \
+      cmake \
+      git && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch "v${BROTLI_VERSION}" https://github.com/google/brotli.git /src
+
+WORKDIR /src
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    triplet="$(gcc -print-multiarch)"; \
+    cmake -S . -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR="lib/${triplet}" \
+      -DBUILD_SHARED_LIBS=ON \
+      -DBROTLI_BUILD_TOOLS=OFF; \
+    cmake --build build -j"$(nproc)"; \
+    DESTDIR=/tmp/stage cmake --install build; \
+    pkg="/tmp/libbrotli1"; \
+    mkdir -p "${pkg}/DEBIAN" "${pkg}/usr/lib/${triplet}"; \
+    cp -a /tmp/stage/usr/lib/"${triplet}"/libbrotli*.so.1* "${pkg}/usr/lib/${triplet}/"; \
+    printf 'activate-noawait ldconfig\n' > "${pkg}/DEBIAN/triggers"; \
+    printf '%s\n' \
+      'Package: libbrotli1' \
+      "Version: ${BROTLI_VERSION}-1" \
+      'Section: libs' \
+      'Priority: optional' \
+      "Architecture: ${arch}" \
+      'Maintainer: secured-images <secured-images@localhost>' \
+      'Depends: libc6 (>= 2.34)' \
+      "Description: Brotli shared libraries rebuilt from ${BROTLI_VERSION}" \
+      " Upstream ${BROTLI_VERSION} fixes CVE-2026-111497. Ubuntu 24.04 patches" \
+      ' 1.1.0 without changing the upstream version scanners match.' \
+      > "${pkg}/DEBIAN/control"; \
+    dpkg-deb --root-owner-group --build "${pkg}" "/libbrotli1_${BROTLI_VERSION}-1_${arch}.deb"
+
 FROM graylog/graylog:7.2.1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+COPY --from=brotli /libbrotli1_*.deb /tmp/
+
 # Official graylog runs as graylog (UID 1100); apt needs root.
 USER root
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    apt-get update; \
+    apt-get upgrade -y; \
+    apt-get install -y --no-install-recommends /tmp/libbrotli1_*.deb; \
+    dpkg-query -W -f '${Package} ${Version}\n' libbrotli1; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/libbrotli1_*.deb
 
 USER graylog
